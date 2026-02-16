@@ -8,6 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     strategy:
       matrix:
         abi: [armeabi-v7a, arm64-v8a, x86, x86_64]
@@ -21,7 +22,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
 
-    # Java 17 is REQUIRED for modern sdkmanager
+    # Java 17 is REQUIRED for sdkmanager
     - name: Setup Java
       uses: actions/setup-java@v3
       with:
@@ -31,7 +32,7 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v2
 
-    - name: Install SDK components
+    - name: Install Android SDK components
       run: |
         sdkmanager \
           "platforms;android-${ANDROID_API}" \
@@ -44,9 +45,10 @@ jobs:
           -o zmq.tar.gz
         tar -xf zmq.tar.gz
 
-    - name: Configure & Build
-      working-directory: zeromq-${ZMQ_VERSION}
+    - name: Configure & Build ZeroMQ
       run: |
+        cd zeromq-${ZMQ_VERSION}
+
         mkdir -p build-${{ matrix.abi }}
         cd build-${{ matrix.abi }}
 
