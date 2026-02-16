@@ -1,0 +1,69 @@
+name: Build ZMQ for Android
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        abi: [armeabi-v7a, arm64-v8a, x86, x86_64]
+
+    env:
+      ANDROID_API: 21
+      ZMQ_VERSION: 4.3.5
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Setup Java (required for Android SDK)
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '11'
+
+    - name: Install Android SDK + NDK
+      uses: android-actions/setup-android@v2
+      with:
+        api-level: ${{ env.ANDROID_API }}
+        ndk: '25.2.9519653'
+        components: build-tools;33.0.2
+
+    # Download ZMQ
+    - name: Fetch ZeroMQ
+      run: |
+        curl -L https://github.com/zeromq/libzmq/releases/download/v${ZMQ_VERSION}/zeromq-${ZMQ_VERSION}.tar.gz \
+          -o zmq.tar.gz
+        tar -xf zmq.tar.gz
+
+    - name: Configure & Build
+      working-directory: zeromq-${ZMQ_VERSION}
+      run: |
+        mkdir -p build-${{ matrix.abi }}
+        cd build-${{ matrix.abi }}
+
+        # Configure Android NDK toolchain
+        cmake \
+          -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+          -DANDROID_ABI=${{ matrix.abi }} \
+          -DANDROID_PLATFORM=android-${ANDROID_API} \
+          -DBUILD_SHARED=OFF \
+          -DCMAKE_BUILD_TYPE=Release \
+          ..
+
+        cmake --build . -- -j$(nproc)
+
+    - name: Collect output
+      run: |
+        mkdir -p output/${{ matrix.abi }}
+        cp build-${{ matrix.abi }}/libzmq.a output/${{ matrix.abi }}/
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: libzmq-${{ matrix.abi }}
+        path: output/${{ matrix.abi }}
