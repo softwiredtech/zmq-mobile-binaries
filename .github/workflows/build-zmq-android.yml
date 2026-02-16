@@ -15,25 +15,29 @@ jobs:
     env:
       ANDROID_API: 21
       ZMQ_VERSION: 4.3.5
+      NDK_VERSION: 25.2.9519653
 
     steps:
     - name: Checkout
       uses: actions/checkout@v3
 
-    - name: Setup Java (required for Android SDK)
+    # Java 17 is REQUIRED for modern sdkmanager
+    - name: Setup Java
       uses: actions/setup-java@v3
       with:
-        distribution: 'temurin'
-        java-version: '11'
+        distribution: temurin
+        java-version: 17
 
-    - name: Install Android SDK + NDK
+    - name: Setup Android SDK
       uses: android-actions/setup-android@v2
-      with:
-        api-level: ${{ env.ANDROID_API }}
-        ndk: '25.2.9519653'
-        components: build-tools;33.0.2
 
-    # Download ZMQ
+    - name: Install SDK components
+      run: |
+        sdkmanager \
+          "platforms;android-${ANDROID_API}" \
+          "build-tools;33.0.2" \
+          "ndk;${NDK_VERSION}"
+
     - name: Fetch ZeroMQ
       run: |
         curl -L https://github.com/zeromq/libzmq/releases/download/v${ZMQ_VERSION}/zeromq-${ZMQ_VERSION}.tar.gz \
@@ -46,7 +50,6 @@ jobs:
         mkdir -p build-${{ matrix.abi }}
         cd build-${{ matrix.abi }}
 
-        # Configure Android NDK toolchain
         cmake \
           -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
           -DANDROID_ABI=${{ matrix.abi }} \
@@ -60,7 +63,7 @@ jobs:
     - name: Collect output
       run: |
         mkdir -p output/${{ matrix.abi }}
-        cp build-${{ matrix.abi }}/libzmq.a output/${{ matrix.abi }}/
+        cp zeromq-${ZMQ_VERSION}/build-${{ matrix.abi }}/libzmq.a output/${{ matrix.abi }}/
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
