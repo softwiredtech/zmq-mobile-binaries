@@ -57,6 +57,7 @@ jobs:
           -DWITH_PERF_TOOL=OFF \
           -DZMQ_BUILD_TESTS=OFF \
           -DENABLE_DRAFTS=OFF \
+          -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
           -DCMAKE_C_COMPILER_WORKS=TRUE \
           -DCMAKE_CXX_COMPILER_WORKS=TRUE \
           ..
