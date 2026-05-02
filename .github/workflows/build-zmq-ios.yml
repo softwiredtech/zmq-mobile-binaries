@@ -12,13 +12,13 @@ jobs:
     strategy:
       matrix:
         include:
-          - platform: OS64
+          - sdk: iphoneos
             arch: arm64
             label: device-arm64
-          - platform: SIMULATORARM64
+          - sdk: iphonesimulator
             arch: arm64
             label: simulator-arm64
-          - platform: SIMULATOR64
+          - sdk: iphonesimulator
             arch: x86_64
             label: simulator-x86_64
 
@@ -36,21 +36,19 @@ jobs:
           -o zmq.tar.gz
         tar -xf zmq.tar.gz
 
-    - name: Fetch ios-cmake toolchain
-      run: |
-        curl -L https://raw.githubusercontent.com/nickhutchinson/ios-cmake/master/toolchain/iOS.cmake \
-          -o ios.toolchain.cmake
-
     - name: Configure & Build ZeroMQ
       run: |
+        SDK_PATH=$(xcrun --sdk ${{ matrix.sdk }} --show-sdk-path)
+
         cd zeromq-${ZMQ_VERSION}
 
         mkdir -p build-${{ matrix.label }}
         cd build-${{ matrix.label }}
 
         cmake \
-          -DCMAKE_TOOLCHAIN_FILE=${GITHUB_WORKSPACE}/ios.toolchain.cmake \
-          -DIOS_PLATFORM=${{ matrix.platform }} \
+          -G "Unix Makefiles" \
+          -DCMAKE_SYSTEM_NAME=iOS \
+          -DCMAKE_OSX_SYSROOT=${SDK_PATH} \
           -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
           -DCMAKE_OSX_DEPLOYMENT_TARGET=${IOS_DEPLOYMENT_TARGET} \
           -DBUILD_SHARED=OFF \
@@ -59,6 +57,8 @@ jobs:
           -DWITH_PERF_TOOL=OFF \
           -DZMQ_BUILD_TESTS=OFF \
           -DENABLE_DRAFTS=OFF \
+          -DCMAKE_C_COMPILER_WORKS=TRUE \
+          -DCMAKE_CXX_COMPILER_WORKS=TRUE \
           ..
 
         cmake --build . -- -j$(sysctl -n hw.logicalcpu)
