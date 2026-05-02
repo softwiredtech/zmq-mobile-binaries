@@ -1,0 +1,105 @@
+name: Build ZMQ for iOS
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        include:
+          - platform: OS64
+            arch: arm64
+            label: device-arm64
+          - platform: SIMULATORARM64
+            arch: arm64
+            label: simulator-arm64
+          - platform: SIMULATOR64
+            arch: x86_64
+            label: simulator-x86_64
+
+    env:
+      ZMQ_VERSION: 4.3.5
+      IOS_DEPLOYMENT_TARGET: "13.0"
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Fetch ZeroMQ
+      run: |
+        curl -L https://github.com/zeromq/libzmq/releases/download/v${ZMQ_VERSION}/zeromq-${ZMQ_VERSION}.tar.gz \
+          -o zmq.tar.gz
+        tar -xf zmq.tar.gz
+
+    - name: Fetch ios-cmake toolchain
+      run: |
+        curl -L https://raw.githubusercontent.com/nickhutchinson/ios-cmake/master/toolchain/iOS.cmake \
+          -o ios.toolchain.cmake
+
+    - name: Configure & Build ZeroMQ
+      run: |
+        cd zeromq-${ZMQ_VERSION}
+
+        mkdir -p build-${{ matrix.label }}
+        cd build-${{ matrix.label }}
+
+        cmake \
+          -DCMAKE_TOOLCHAIN_FILE=${GITHUB_WORKSPACE}/ios.toolchain.cmake \
+          -DIOS_PLATFORM=${{ matrix.platform }} \
+          -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=${IOS_DEPLOYMENT_TARGET} \
+          -DBUILD_SHARED=OFF \
+          -DBUILD_TESTS=OFF \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DWITH_PERF_TOOL=OFF \
+          -DZMQ_BUILD_TESTS=OFF \
+          -DENABLE_DRAFTS=OFF \
+          ..
+
+        cmake --build . -- -j$(sysctl -n hw.logicalcpu)
+
+    - name: Collect output
+      run: |
+        mkdir -p output/${{ matrix.label }}
+        cp zeromq-${ZMQ_VERSION}/build-${{ matrix.label }}/lib/libzmq.a output/${{ matrix.label }}/
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: libzmq-ios-${{ matrix.label }}
+        path: output/${{ matrix.label }}
+
+  xcframework:
+    runs-on: macos-latest
+    needs: build
+
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Create XCFramework
+      run: |
+        # Create fat simulator library (arm64 + x86_64)
+        mkdir -p simulator-fat
+        lipo -create \
+          artifacts/libzmq-ios-simulator-arm64/libzmq.a \
+          artifacts/libzmq-ios-simulator-x86_64/libzmq.a \
+          -output simulator-fat/libzmq.a
+
+        xcodebuild -create-xcframework \
+          -library artifacts/libzmq-ios-device-arm64/libzmq.a \
+          -library simulator-fat/libzmq.a \
+          -output libzmq.xcframework
+
+    - name: Upload XCFramework
+      uses: actions/upload-artifact@v4
+      with:
+        name: libzmq-ios-xcframework
+        path: libzmq.xcframework
